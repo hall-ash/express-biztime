@@ -25,35 +25,54 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:code', async (req, res, next) => {
   try {
-    const { code } = req.params;
+    //const { code } = req.params;
 
-    const companyResults = await db.query(`
-      SELECT code, name, description
-      FROM companies 
-      WHERE code=$1`, [code]);
+    // const companyResults = await db.query(`
+    //   SELECT code, name, description
+    //   FROM companies 
+    //   WHERE code=$1`, [code]);
 
-    throwErrorIfNotFound(code, companyResults);
+    // throwErrorIfNotFound(code, companyResults);
 
-    const invoiceResults = await db.query(`
-      SELECT id
-      FROM invoices 
-      WHERE comp_code=$1
-    `, [code]);
+    // const invoiceResults = await db.query(`
+    //   SELECT id
+    //   FROM invoices 
+    //   WHERE comp_code=$1
+    // `, [code]);
     
-    const industryResults = await db.query(`
-      SELECT i.industry
-      FROM industries AS i
-      INNER JOIN companies_industries AS ci
-      ON i.code = ci.ind_code
-      INNER JOIN companies AS c
-      ON ci.comp_code = c.code
-      WHERE c.code = $1
-    `, [code]);
+    // const industryResults = await db.query(`
+    //   SELECT i.industry
+    //   FROM industries AS i
+    //   INNER JOIN companies_industries AS ci
+    //   ON i.code = ci.ind_code
+    //   INNER JOIN companies AS c
+    //   ON ci.comp_code = c.code
+    //   WHERE c.code = $1
+    // `, [code]);
 
-    const company = getResults(companyResults);
-    // create array of invoice ids
-    company.invoices = invoiceResults.rows.map(i => i.id);
-    company.industries = industryResults.rows.map(i => i.industry);
+     // const company = getResults(companyResults);
+    // // create array of invoice ids
+    // company.invoices = invoiceResults.rows.map(i => i.id);
+    // company.industries = industryResults.rows.map(i => i.industry);
+
+    const results = await db.query(`
+      SELECT c.code, c.name, c.description, inv.id, i.industry
+      FROM invoices AS inv
+      RIGHT JOIN companies AS c
+      ON inv.comp_code = c.code
+      LEFT JOIN companies_industries AS ci
+      ON c.code = ci.comp_code
+      LEFT JOIN industries as i
+      ON ci.ind_code = i.code
+      WHERE c.code = $1
+    `, [req.params.code]);
+    
+    throwErrorIfNotFound(req.params.code, results);
+
+    const { code, name, description } = results.rows[0];
+    const invoices = results.rows.map(r => r.id).filter((inv, i, self) => self.indexOf(inv) === i); //.map(r => r.id);
+    const industries = results.rows.map(r => r.industry).filter((ind, i, self) => self.indexOf(ind) === i);
+    const company = { code, name, description, invoices, industries};
 
     return res.json({ company });
   } catch (e) {
