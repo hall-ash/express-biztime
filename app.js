@@ -8,11 +8,11 @@ const ExpressError = require("./expressError")
 app.use(express.json());
 
 const ROUTES_DIR = './routes';
-const routes = ['companies', 'invoices']
+const routes = ['companies', 'invoices', 'industries'];
 
-routes.forEach(path => {
-  const route = require(`${ROUTES_DIR}/${path}`);
-  app.use(`/${path}`, route);
+routes.forEach(routeName => {
+  const route = require(`${ROUTES_DIR}/${routeName}`);
+  app.use(`/${routeName}`, route);
 })
 
 /** 404 handler */

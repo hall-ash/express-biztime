@@ -34,8 +34,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await db.query('DELETE FROM invoices'); // clear invoices table
-  await db.query('DELETE FROM companies'); // clear companies table
+  // clear tables
+  const tables = ['companies', 'invoices', 'industries', 'companies_industries'];
+  await Promise.all(tables.map(t => db.query(`DELETE FROM ${t}`)));
 });
 
 afterAll(async () => {

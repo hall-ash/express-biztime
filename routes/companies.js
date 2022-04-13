@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const ExpressError = require('../expressError');
 const { throwErrorIfNotFound, getResults } = require('../helpers');
 const slugify = require('slugify');
 
@@ -39,10 +40,20 @@ router.get('/:code', async (req, res, next) => {
       WHERE comp_code=$1
     `, [code]);
     
+    const industryResults = await db.query(`
+      SELECT i.industry
+      FROM industries AS i
+      INNER JOIN companies_industries AS ci
+      ON i.code = ci.ind_code
+      INNER JOIN companies AS c
+      ON ci.comp_code = c.code
+      WHERE c.code = $1
+    `, [code]);
 
     const company = getResults(companyResults);
     // create array of invoice ids
     company.invoices = invoiceResults.rows.map(i => i.id);
+    company.industries = industryResults.rows.map(i => i.industry);
 
     return res.json({ company });
   } catch (e) {
@@ -90,6 +101,54 @@ router.put('/:code', async (req, res, next) => {
     return next(e);
   }
 });
+
+// add an industry to the company
+router.patch('/:code/add-industry', async (req, res, next) => {
+  try {
+    const { code: comp_code } = req.params;
+    const { ind_code } = req.body;
+
+    await db.query(`
+      INSERT INTO companies_industries
+      (comp_code, ind_code)
+      VALUES
+      ($1, $2)
+      RETURNING comp_code, ind_code
+    `, [comp_code, ind_code]);
+
+    const companyResults = await db.query(`
+    SELECT code, name
+    FROM companies 
+    WHERE code=$1`, [comp_code]);
+
+    const industryResults = await db.query(`
+      SELECT i.industry
+      FROM industries AS i
+      INNER JOIN companies_industries AS ci
+      ON i.code = ci.ind_code
+      INNER JOIN companies AS c
+      ON ci.comp_code = c.code
+      WHERE c.code = $1
+    `, [comp_code]);
+
+    const company = getResults(companyResults);
+    company.industries = industryResults.rows.map(i => i.industry);
+
+    return res.json({ company });
+
+  } catch (e) {
+    // can't insert into companies_industries 
+    // either ind_code or comp_code doesn't exist
+    if (e.detail.includes('not present in table')) { 
+      const msg = e.detail.includes('ind_code') ? 'Could not find industry' : 'Could not find company';
+      return next(new ExpressError(msg, 404));
+    }
+    if (e.detail.includes('already exists')) {
+      return next(new ExpressError(`The industry has already been added to this company.`, 400));
+    }
+    return next(e);
+  }
+})
 
 router.delete('/:code', async (req, res, next) => {
   try {

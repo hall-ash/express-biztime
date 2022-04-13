@@ -13,24 +13,44 @@ beforeEach(async () => {
   const companyResult = await db.query(`
     INSERT INTO companies
     (code, name, description) 
-    VALUES ('ibm', 'IBM', 'Big Blue')
+    VALUES 
+    ('ibm', 'IBM', 'Big Blue')
     RETURNING code, name, description
   `);
 
   const invoiceResult = await db.query(`
     INSERT INTO invoices
     (comp_code, amt)
-    VALUES ('ibm', 999)
+    VALUES 
+    ('ibm', 999)
     RETURNING id
+  `);
+
+  const industryResult = await db.query(`
+    INSERT INTO industries
+    (code, industry)
+    VALUES 
+    ('tech', 'Technology'),
+    ('acct', 'Accounting')
+    RETURNING industry
+  `);
+
+  await db.query(`
+    INSERT INTO companies_industries
+    (comp_code, ind_code)
+    VALUES 
+    ('ibm', 'tech')
   `);
 
   testCompany = companyResult.rows[0];
   testCompany.invoices = [invoiceResult.rows[0].id];
+  testCompany.industries = [industryResult.rows[0].industry];
 });
 
 afterEach(async () => {
-  await db.query("DELETE FROM companies"); // delete data created from tests
-  await db.query("DELETE FROM invoices");
+  // drop tables
+  const tables = ['companies', 'invoices', 'industries', 'companies_industries'];
+  await Promise.all(tables.map(t => db.query(`DELETE FROM ${t}`)));
 });
 
 afterAll(async () => {
@@ -188,17 +208,56 @@ describe(`PUT ${ROUTE}/:code`, () => {
   });
 });
 
+describe(`PATCH ${ROUTE}/:code/add-industry`, () => {
+  it ("should add an association between the given company and the industry passed in the request body", async () => {
+
+    const res = await request(app)
+      .patch(`${ROUTE}/${testCompany.code}/add-industry`)
+      .send({ ind_code: 'acct'});
+
+    expect(res.statusCode).toEqual(200);
+    expect(res.type).toBe(JSON);
+    expect(res.body).toEqual({
+      company: {
+        code: testCompany.code,
+        name: testCompany.name,
+        industries: ['Technology', 'Accounting']
+      }
+    });
+  });
+
+  it("should return a 404 if either the industry can't be found", async () => {
+    // turn off console error message 
+    const originalError = console.error;
+    console.error = jest.fn(); // replace console.error with a Jest-mocked function
+
+    
+    const res = await request(app)
+      .patch(`${ROUTE}/${testCompany.code}/add`)
+      .send({ ind_code: 'invalid'});
+
+    expect(res.statusCode).toEqual(404);
+    expect(res.type).toBe(JSON);
+  
+    console.error = originalError;
+  });
+});
+
 
 describe(`DELETE ${ROUTE}/:code`, () => {
   it ("should delete the given company and return a confirmation message", async () => {
 
-    const res = await request(app)
-      .delete(`${ROUTE}/${testCompany.code}`);
+    const res = await request(app).delete(`${ROUTE}/${testCompany.code}`);
 
     expect(res.statusCode).toEqual(200);
     expect(res.body).toEqual({status: "deleted"});
     expect(res.type).toBe(JSON);
 
+    // expect to get an empty list of companies
+    const emptyRes = await request(app).get(`${ROUTE}`);
+    
+    expect(emptyRes.body).toEqual({ companies: [] });
+    
   });
 
   it (`should return a 404 and the companies in the database 
@@ -208,8 +267,7 @@ describe(`DELETE ${ROUTE}/:code`, () => {
     const originalError = console.error;
     console.error = jest.fn(); // replace console.error with a Jest-mocked function
 
-    const res = await request(app)
-      .delete(`${ROUTE}/INVALID_CODE`);
+    const res = await request(app).delete(`${ROUTE}/INVALID_CODE`);
 
     expect(res.statusCode).toEqual(404);
 
