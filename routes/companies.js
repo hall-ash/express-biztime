@@ -14,7 +14,7 @@ router.get('/', async (req, res, next) => {
       ORDER BY name
     `);
 
-    const companies = getResults(results);
+    const companies = results.rows;
     
     return res.json({ companies });
   } catch (e) {
@@ -98,6 +98,7 @@ router.delete('/:code', async (req, res, next) => {
     const results = await db.query(`
       DELETE FROM companies
       WHERE code=$1
+      RETURNING code
     `, [code]);
 
     throwErrorIfNotFound(code, results);

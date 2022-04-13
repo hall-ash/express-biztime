@@ -15,7 +15,7 @@ router.get('/', async (req, res, next) => {
       FROM invoices
     `);
 
-    const invoices = getResults(results);
+    const invoices = results.rows;
 
     return res.json({ invoices });
 
@@ -31,7 +31,6 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // get the comPANY TO0 ******
     const invoiceResults = await db.query(`
       SELECT id, amt, paid, add_date, paid_date 
       FROM invoices
@@ -50,7 +49,7 @@ router.get('/:id', async (req, res, next) => {
    
     const invoice = getResults(invoiceResults);
     invoice.company = getResults(companyResults);
-
+  
     return res.json({ invoice });
 
   } catch (e) {
@@ -73,7 +72,7 @@ router.post('/', async (req, res, next) => {
 
     const invoice = getResults(results);
 
-    return res.json({ invoice });
+    return res.status(201).json({ invoice });
   } catch (e) {
     return next(e);
   }
@@ -86,16 +85,36 @@ router.post('/', async (req, res, next) => {
 router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { amt } = req.body;
+    const { amt: updatedAmount, paid: paying } = req.body;
 
-    const results = await db.query(`
+    const currInvoiceResults = await db.query(`
+      SELECT paid, amt, paid_date
+      FROM invoices
+      WHERE id = $1
+    `, [id]);
+
+    throwErrorIfNotFound(id, currInvoiceResults);
+
+    const currInvoice = getResults(currInvoiceResults);
+    
+    let paid_date;
+    let paid;
+
+    if (typeof paying === 'boolean') {
+      paid = paying;
+      paid_date = paying ? new Date() : null;
+    } else {
+      paid_date = currInvoice.paid_date;
+      paid = currInvoice.paid;
+    }
+    const amt = updatedAmount ? updatedAmount : currInvoice.amt;
+   
+    results = await db.query(`
       UPDATE invoices
-      SET amt = $1
-      WHERE id = $2
+      SET amt = $2, paid = $3, paid_date = $4
+      WHERE id = $1
       RETURNING id, comp_code, amt, paid, add_date, paid_date
-    `, [amt, id]);
-
-    throwErrorIfNotFound(id, results);
+    `, [id, amt, paid, paid_date]);
 
     const invoice = getResults(results);
 
