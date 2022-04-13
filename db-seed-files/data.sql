@@ -45,7 +45,8 @@ INSERT INTO invoices (comp_code, amt, paid, paid_date)
   VALUES ('apple', 100, false, null),
         ('apple', 200, false, null),
         ('apple', 300, true, '2018-01-01'),
-        ('ibm', 400, false, null);
+        ('ibm', 400, false, null),
+        ('ibm', 500, true, '2020-01-02');
 
 INSERT INTO industries 
 (code, industry)
